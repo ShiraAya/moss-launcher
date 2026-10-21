@@ -26,7 +26,22 @@ test("atomic metadata writes tolerate concurrent refreshes", async (t) => {
   await Promise.all(
     Array.from({ length: 12 }, (_, id) => atomicJSON(file, { id })),
   );
-  assert.equal(typeof JSON.parse(await fs.readFile(file, "utf8")).id, "number");
+  assert.equal(JSON.parse(await fs.readFile(file, "utf8")).id, 11);
+  assert.deepEqual(await fs.readdir(root), ["cache.json"]);
+});
+test("a failed metadata write does not block the next write to the same file", async (t) => {
+  const root = await temp(t),
+    file = path.join(root, "cache.json");
+  await atomicJSON(file, { id: "previous" });
+  const invalid = {};
+  invalid.circular = invalid;
+  const failed = atomicJSON(file, invalid);
+  const recovered = atomicJSON(file, { id: "recovered" });
+  await assert.rejects(failed, /circular/i);
+  await recovered;
+  assert.deepEqual(JSON.parse(await fs.readFile(file, "utf8")), {
+    id: "recovered",
+  });
   assert.deepEqual(await fs.readdir(root), ["cache.json"]);
 });
 test("log decoder redacts split secrets and handles split XML and UTF-8", () => {

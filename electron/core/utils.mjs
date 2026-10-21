@@ -3,6 +3,7 @@ import os from "node:os";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 
 export const MANIFEST_URL =
   "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
@@ -35,15 +36,44 @@ export function safePath(root, relative) {
     throw new Error("文件超出目标目录");
   return dest;
 }
-export async function atomicJSON(file, value) {
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  const tmp = file + "." + randomUUID() + ".tmp";
-  try {
-    await fs.writeFile(tmp, JSON.stringify(value, null, 2), { mode: 0o600 });
-    await fs.rename(tmp, file);
-  } finally {
-    await fs.rm(tmp, { force: true });
-  }
+const jsonWrites = new Map();
+export function atomicJSON(file, value) {
+  const target = path.resolve(file);
+  const key = process.platform === "win32" ? target.toLowerCase() : target;
+  // Windows cannot reliably replace a target while another rename is in flight.
+  const previous = jsonWrites.get(key) || Promise.resolve();
+  const pending = previous
+    .catch(() => {})
+    .then(async () => {
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      const tmp = target + "." + randomUUID() + ".tmp";
+      try {
+        await fs.writeFile(tmp, JSON.stringify(value, null, 2), {
+          mode: 0o600,
+        });
+        for (let attempt = 0; ; attempt++) {
+          try {
+            await fs.rename(tmp, target);
+            break;
+          } catch (e) {
+            if (
+              process.platform !== "win32" ||
+              !["EPERM", "EACCES", "EBUSY"].includes(e.code) ||
+              attempt >= 5
+            )
+              throw e;
+            // Brief antivirus/indexer locks should not lose the previous valid file.
+            await delay(20 * 2 ** attempt);
+          }
+        }
+      } finally {
+        await fs.rm(tmp, { force: true });
+      }
+    });
+  jsonWrites.set(key, pending);
+  return pending.finally(() => {
+    if (jsonWrites.get(key) === pending) jsonWrites.delete(key);
+  });
 }
 export async function readJSON(file, fallback) {
   try {
