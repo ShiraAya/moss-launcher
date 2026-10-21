@@ -15,7 +15,7 @@
     "check": "pnpm test && pnpm build",
     "pack": "pnpm build && electron-builder --dir",
     "dist:mac": "pnpm build && node scripts/package-mac.mjs",
-    "dist:win": "pnpm build && electron-builder --win nsis --x64"
+    "dist:win": "pnpm build && electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
     "@xmcl/core": "2.16.2",

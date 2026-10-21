@@ -7,6 +7,7 @@
 - 原始 `v0.1.0` / `v0.2.0` 标签在 GitHub 的 macOS runner 上通过测试和打包。
 - Windows runner 发现两个历史版本的并发元数据写入测试出现 `EPERM`：同一目标文件的多个原子重命名发生竞争；其余测试通过。两个历史 Release 保留原始安装包，并标明此问题。
 - `main` 的未发布修复将同一目标文件的写入串行化，并对 Windows 的短暂文件占用做有限重试。新增失败写入不阻塞后续写入的回归测试，本地 **28 项测试**与 TypeScript / Vite 构建通过。
+- 修复后的 **28 项测试在 Windows runner 上全部通过**。Windows 打包命令显式指定 `--publish never`，避免 electron-builder 在 CI 环境自动尝试发布并要求 `GH_TOKEN`；Release 仍由单独的发布流程管理。
 
 ## 已通过
 
