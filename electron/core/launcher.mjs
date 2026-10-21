@@ -11,6 +11,7 @@ import {
   libraryFiles,
   context,
   expandArgs,
+  mergeVersion,
 } from "./utils.mjs";
 import { download, jsonRequest, parallel } from "./network.mjs";
 import { GameLogDecoder } from "./logs.mjs";
@@ -53,16 +54,27 @@ export class GameManager {
           null,
         );
         if (record) {
-          await fs.access(path.join(this.root, "versions", id, `${id}.jar`));
+          const meta = await this.metadata(id);
+          const client = safeId(meta.clientVersion || id);
+          await fs.access(
+            path.join(this.root, "versions", client, `${client}.jar`),
+          );
           list.push(record);
         }
       } catch {}
     }
     return list.sort((a, b) => b.installedAt.localeCompare(a.installedAt));
   }
-  async metadata(id) {
+  async metadata(id, seen = new Set()) {
     safeId(id);
-    return readJSON(path.join(this.root, "versions", id, `${id}.json`));
+    if (seen.has(id) || seen.size > 12) throw new Error("版本继承关系无效");
+    seen.add(id);
+    const meta = await readJSON(
+      path.join(this.root, "versions", id, `${id}.json`),
+    );
+    return meta.inheritsFrom
+      ? mergeVersion(await this.metadata(meta.inheritsFrom, seen), meta)
+      : { ...meta, clientVersion: meta.id || id };
   }
   async install(id, { source = "official", signal } = {}) {
     safeId(id);
@@ -204,6 +216,34 @@ export class GameManager {
     const natives = path.join(base, `natives-${process.platform}-${java.arch}`);
     const gameDir = path.join(this.root, "instances", id);
     await fs.mkdir(gameDir, { recursive: true });
+    const forgeLike = meta.libraries.some((l) =>
+      /^net\.(minecraftforge|neoforged):/.test(l.name),
+    );
+    if (process.platform === "darwin" && forgeLike) {
+      const config = path.join(gameDir, "config/fml.toml");
+      await fs.mkdir(path.dirname(config), { recursive: true });
+      let original = "";
+      try {
+        original = await fs.readFile(config, "utf8");
+      } catch (e) {
+        if (e.code !== "ENOENT") throw e;
+      }
+      const value = `earlyWindowControl = ${settings.macCompatibility === false}`;
+      const next = /^earlyWindowControl\s*=.*$/m.test(original)
+        ? original.replace(/^earlyWindowControl\s*=.*$/m, value)
+        : value + "\n" + original;
+      if (original !== next) {
+        if (original)
+          await fs
+            .writeFile(config + ".moss-backup", original, { flag: "wx" })
+            .catch((e) => {
+              if (e.code !== "EEXIST") throw e;
+            });
+        await fs.writeFile(config, next);
+      }
+      if (settings.macCompatibility !== false)
+        this.log("macOS 图形兼容模式：关闭 Forge / NeoForge 早期加载窗口。");
+    }
     await fs.rm(natives, { force: true, recursive: true });
     await fs.mkdir(natives, { recursive: true });
     const libs = libraryFiles(meta, ctx);
@@ -235,11 +275,16 @@ export class GameManager {
       ...libs
         .filter((l) => l.classpath)
         .map((l) => safePath(path.join(this.root, "libraries"), l.path)),
-      path.join(base, `${id}.jar`),
+      path.join(
+        this.root,
+        "versions",
+        safeId(meta.clientVersion),
+        `${meta.clientVersion}.jar`,
+      ),
     ].join(path.delimiter);
     const vars = {
       auth_player_name: account.name,
-      version_name: id,
+      version_name: meta.clientVersion,
       game_directory: gameDir,
       assets_root: path.join(this.root, "assets"),
       assets_index_name: meta.assetIndex.id,
@@ -251,7 +296,7 @@ export class GameManager {
       version_type: meta.type,
       natives_directory: natives,
       launcher_name: "Moss",
-      launcher_version: "0.1.0",
+      launcher_version: "0.2.0",
       classpath,
       classpath_separator: path.delimiter,
       library_directory: path.join(this.root, "libraries"),
@@ -262,6 +307,12 @@ export class GameManager {
     const jvm = expandArgs(meta.arguments.jvm, vars, ctx);
     const game = expandArgs(meta.arguments.game, vars, ctx);
     const args = [`-Xms512M`, `-Xmx${settings.memoryMB}M`, ...jvm];
+    if (
+      process.platform === "darwin" &&
+      forgeLike &&
+      settings.macCompatibility !== false
+    )
+      args.push("-Dfml.earlyprogresswindow=false");
     if (meta.logging?.client) {
       const logging = meta.logging.client;
       args.push(

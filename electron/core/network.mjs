@@ -7,17 +7,26 @@ import { randomUUID } from "node:crypto";
 import { sourceURLs, validFile } from "./utils.mjs";
 
 export async function httpsFetch(url, options = {}) {
+  options = { ...options, headers: { ...options.headers } };
   for (let n = 0; n < 8; n++) {
     if (new URL(url).protocol !== "https:")
       throw new Error("服务器返回了不安全的下载地址");
     const res = await fetch(url, {
       ...options,
       redirect: "manual",
-      headers: { "User-Agent": "MossLauncher/0.1.0", ...options.headers },
+      headers: { "User-Agent": "MossLauncher/0.2.0", ...options.headers },
     });
     if ([301, 302, 303, 307, 308].includes(res.status)) {
       await res.body?.cancel();
-      url = new URL(res.headers.get("location"), url).href;
+      const next = new URL(res.headers.get("location"), url);
+      if (next.origin !== new URL(url).origin) {
+        for (const key of Object.keys(options.headers))
+          if (
+            ["authorization", "x-api-key", "cookie"].includes(key.toLowerCase())
+          )
+            delete options.headers[key];
+      }
+      url = next.href;
       continue;
     }
     return res;
@@ -66,7 +75,9 @@ export async function download(
   if (await validFile(dest, item)) return { cached: true };
   await fs.mkdir(path.dirname(dest), { recursive: true });
   let last;
-  for (const url of sourceURLs(item.url, source))
+  for (const url of [
+    ...new Set((item.urls || [item.url]).flatMap((u) => sourceURLs(u, source))),
+  ])
     for (let attempt = 0; attempt < 3; attempt++) {
       signal?.throwIfAborted();
       const temp = dest + "." + randomUUID() + ".part";

@@ -1,10 +1,11 @@
-# 0.1.0 验收记录
+# 0.2.0 验收记录
 
 验证日期：2026-10-21。测试机：macOS / Apple Silicon，16 GB 内存。
 
 ## 已通过
 
-- **15 项自动化核心测试**：平台规则与特性开关、macOS / Windows 原生库架构选择、路径安全、BMCLAPI 地址映射、离线 UUID、启动参数与隔离目录、哈希修复、缓存复用、镜像回退、取消清理、并发任务收尾、并发元数据写入、跨数据块日志脱敏。
+- **27 项自动化核心测试**：平台规则与特性开关、macOS / Windows 原生库架构选择、路径安全、BMCLAPI 地址映射、离线 UUID、启动参数与隔离目录、哈希修复、缓存复用、镜像回退、取消清理、并发任务收尾、并发元数据写入、跨数据块日志脱敏。
+- 新增覆盖：Maven 坐标、继承版本与客户端 JAR、NeoForge ignoreList、ZIP 路径与链接检查、大小写冲突、Modrinth 依赖与客户端覆盖、普通 ZIP / MultiMC 识别、导入提交与回滚、CurseForge 分发限制及手动文件校验、SHA-512、跨域重定向移除凭据、取消安装处理器。
 - **TypeScript 检查及 Vite 生产构建**。
 - **开发模式 GUI**：Electron + Vite 成功渲染，无页面运行时异常；开发 CSP 与生产 CSP 分别处理。
 - **Mojang / BMCLAPI 联网读取**：实际读取版本清单，验证搜索与最新正式版元数据，非静态演示数据。
@@ -15,8 +16,25 @@
 - **Mac arm64 / x64 应用**：`codesign --verify --deep --strict` 通过。
 - **Mac arm64 / x64 磁盘镜像**：`hdiutil verify` 校验通过。
 
+## 新组件与整合包实际测试
+
+在同一台 Apple Silicon Mac 上，使用 Minecraft **1.21.1** / Java **21.0.6 arm64** 完成真实网络下载、安装和进程启动，均确认 `textures/atlas/gui.png-atlas` 初始化成功后结束自己的测试进程：
+
+| 组件 | 测试版本 | 结果 |
+| --- | --- | --- |
+| Fabric | 0.16.14 | 下载、安装、启动通过 |
+| Forge | 52.0.16 | 安装处理器通过；关闭早期加载窗口后启动通过 |
+| NeoForge | 21.1.172 | 安装处理器通过；共享客户端 JAR 的 ignoreList 修复后启动通过 |
+| OptiFine | HD_U_J1 | BMCLAPI 下载、补丁生成、启动通过，日志显示 OptiFine 加载 |
+| Modrinth 整合包 | Minecraft 1.21.1 + Fabric 0.16.14 + Fabric API 0.116.1 | 导入示例 `.mrpack`，下载并校验真实 Fabric API，配置落盘，启动日志确认加载该模组并完成 GUI 图集初始化 |
+
+**0.2.0 打包后的 Mac arm64 应用**端到端测试通过版本页入口、四个在线组件列表、导入预览、实例名称编辑、导入任务、已安装列表和底部启动按钮，页面运行时异常为 0。新图标在安装卡片、版本列表和底部启动栏共享同一组件。
+
+打包应用实际获取的 Minecraft 1.21.1 组件清单：Fabric 255 项、Forge 69 项、NeoForge 259 项、OptiFine 8 项；数量会随上游发布变化。
+
 ## 验证边界
 
+- CurseForge 清单解析、禁止自动下载及手动补齐使用固定 API 响应进行自动化验证；没有用户 API Key，未做真实账户的 CurseForge 远程下载验收。MultiMC 与普通 ZIP 使用本地 ZIP 用例验证；没有逐一验证第三方大型整合包。
 - 微软登录已经实现设备码 → Xbox → XSTS → Minecraft → 游戏档案的链路与令牌刷新，但没有提供用户自己的 Client ID 和正版测试账户，**尚未完成真人登录验收**。
 - Windows x64 安装包采用交叉构建；测试覆盖 Windows 参数和原生库规则，**没有 Windows 真机安装、启动游戏的结果**。
 - Mac Intel x64 完成打包与签名校验，**没有 Intel Mac 的游戏运行测试**。
@@ -31,9 +49,6 @@
 - TypeScript 5.9.3
 - electron-builder 26.15.3
 - pnpm 11.25.0 / Node.js 24
+- @xmcl/installer 6.3.6 / @xmcl/core 2.16.2，发布入口补丁随源码提供
 
 精确依赖版本与完整性信息见 `pnpm-lock.yaml`。运行 `pnpm test` 与 `pnpm build` 可重跑本地自动检查。
-
-## 发布源码恢复验证
-
-建立 Git 历史时，旧源码压缩包已被 0.2.0 替换。本标签的 0.1.0 源码从发布安装包与同次开发文件恢复；使用相同依赖重新构建后，生成的 `dist/index.html`、JavaScript、CSS 与 0.1.0 Mac arm64 安装包逐字节一致，`electron/` 全部运行时代码也逐字节一致，15 项测试通过。构建工具及说明文件恢复为对应版本的配置，未将 0.2.0 功能混入 0.1.0 标签。

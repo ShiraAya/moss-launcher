@@ -62,12 +62,10 @@ export async function validFile(file, item) {
   try {
     const st = await fs.stat(file);
     if (item.size && st.size !== item.size) return false;
-    const hash = item.sha1 || item.sha256;
+    const algorithm = ["sha512", "sha256", "sha1", "md5"].find((a) => item[a]);
+    const hash = algorithm && item[algorithm];
     if (!hash) return st.size > 0;
-    return (
-      (await digest(file, item.sha256 ? "sha256" : "sha1")) ===
-      hash.toLowerCase()
-    );
+    return (await digest(file, algorithm)) === hash.toLowerCase();
   } catch {
     return false;
   }
@@ -114,9 +112,11 @@ export function libraryFiles(meta, ctx = context()) {
           : "x64";
       if (arch !== ctx.arch) continue;
     }
-    if (lib.downloads?.artifact)
+    const artifact =
+      lib.downloads?.artifact || (!lib.downloads && mavenArtifact(lib));
+    if (artifact)
       out.push({
-        ...lib.downloads.artifact,
+        ...artifact,
         native: classifier.startsWith("natives-"),
         classpath: true,
       });
@@ -137,6 +137,46 @@ export function libraryFiles(meta, ctx = context()) {
   }
   return [...new Map(out.map((x) => [x.path, x])).values()];
 }
+export function mavenArtifact(lib) {
+  const [coordinate, extension = "jar"] = lib.name.split("@");
+  const [group, name, version, classifier] = coordinate.split(":");
+  if (!group || !name || !version) throw new Error("无效的 Maven 坐标");
+  const relative = `${group.replaceAll(".", "/")}/${name}/${version}/${name}-${version}${classifier ? "-" + classifier : ""}.${extension}`;
+  safePath("/libraries", relative);
+  const host = (lib.url || "https://libraries.minecraft.net/").replace(
+    /^http:/,
+    "https:",
+  );
+  return {
+    path: relative,
+    url: host.replace(/\/$/, "") + "/" + relative,
+    sha1: lib.sha1,
+    size: lib.size,
+  };
+}
+export function mergeVersion(parent, child) {
+  const key = (lib) => {
+    const p = lib.name.split(":");
+    return [p[0], p[1], p[3] || ""].join(":");
+  };
+  const overrides = new Set((child.libraries || []).map(key));
+  return {
+    ...parent,
+    ...child,
+    clientVersion: parent.clientVersion || parent.id,
+    libraries: [
+      ...(parent.libraries || []).filter((l) => !overrides.has(key(l))),
+      ...(child.libraries || []),
+    ],
+    arguments: {
+      game: [
+        ...(parent.arguments?.game || []),
+        ...(child.arguments?.game || []),
+      ],
+      jvm: [...(parent.arguments?.jvm || []), ...(child.arguments?.jvm || [])],
+    },
+  };
+}
 export function sourceURLs(url, source) {
   const u = new URL(url);
   if (u.protocol !== "https:") throw new Error("下载地址必须使用 HTTPS");
@@ -153,6 +193,8 @@ export function sourceURLs(url, source) {
   )
     mirror = "https://bmclapi2.bangbang93.com" + u.pathname + u.search;
   else if (host === "libraries.minecraft.net")
+    mirror = "https://bmclapi2.bangbang93.com/maven" + u.pathname;
+  else if (["maven.minecraftforge.net", "maven.fabricmc.net"].includes(host))
     mirror = "https://bmclapi2.bangbang93.com/maven" + u.pathname;
   else if (host === "resources.download.minecraft.net")
     mirror = "https://bmclapi2.bangbang93.com/assets" + u.pathname;

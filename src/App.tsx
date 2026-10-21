@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   House,
+  PackageOpen,
   Layers3,
   Download,
   Settings2,
@@ -31,6 +32,8 @@ import {
   Square,
   CheckCircle2,
 } from "lucide-react";
+import LoaderIcon from "./LoaderIcon";
+import InstallDialog from "./InstallDialog";
 import Landscape, { Cube } from "./Landscape";
 import type {
   State,
@@ -38,6 +41,7 @@ import type {
   Settings,
   Device,
   Version,
+  PackPreview,
 } from "./types";
 type Page =
   "home" | "versions" | "downloads" | "settings" | "accounts" | "logs";
@@ -70,6 +74,9 @@ const date = (v: string) =>
 const api = window.moss;
 
 export default function App() {
+  const [installVersion, setInstallVersion] = useState<string | null>(null);
+  const [pack, setPack] = useState<PackPreview | null>(null);
+  const [readingPack, setReadingPack] = useState(false);
   const [state, setState] = useState<State | null>(null),
     [manifest, setManifest] = useState<Manifest | null>(null),
     [page, setPage] = useState<Page>("home"),
@@ -169,6 +176,10 @@ export default function App() {
     )
       setSelected(state.installed[0].id);
   }, [state?.installed, selected]);
+  useEffect(() => {
+    if (state?.settings.selectedVersion)
+      setSelected(state.settings.selectedVersion);
+  }, [state?.settings.selectedVersion]);
   if (!api)
     return (
       <div className="browser-notice">
@@ -191,10 +202,20 @@ export default function App() {
   const { settings, installed, java, account, busy, running, progress } = state;
   const locked = busy || !!running;
   const save = (v: Partial<Settings>) => run(() => api.saveSettings(v));
-  const install = (id: string) =>
+  const install = (id: string) => setInstallVersion(id);
+  const repair = (id: string) =>
     run(async () => {
-      await api.install(id);
+      await api.repair(id);
       setPage("downloads");
+    });
+  const pickPack = () =>
+    run(async () => {
+      setReadingPack(true);
+      try {
+        setPack(await api.pickPack());
+      } finally {
+        setReadingPack(false);
+      }
     });
   const launch = (id: string) =>
     run(async () => {
@@ -243,12 +264,18 @@ export default function App() {
             "block-avatar " + (v.type === "snapshot" ? "snapshot" : "")
           }
         >
-          <Cube size={compact ? 30 : 38} />
+          <LoaderIcon loader={local?.loader} size={compact ? 32 : 40} />
         </div>
         <div className="version-info">
-          <strong>Minecraft {v.id}</strong>
+          <strong>{local?.name || `Minecraft ${v.id}`}</strong>
           <span>
-            {v.type === "release" ? "正式版" : "开发快照"}
+            {local?.modpack
+              ? "整合包"
+              : local?.loader && local.loader !== "vanilla"
+                ? local.loader + " " + local.loaderVersion
+                : v.type === "release"
+                  ? "正式版"
+                  : "开发快照"}
             <i />{" "}
             {local
               ? `Java ${local.java} · 已安装`
@@ -286,8 +313,18 @@ export default function App() {
               <button
                 className="icon-button"
                 disabled={locked}
-                title="校验并修复游戏文件"
-                onClick={() => void install(v.id)}
+                title="添加加载器或新组件"
+                onClick={() => install(local.minecraft || local.id)}
+              >
+                <Plus size={16} />
+              </button>
+            )}
+            {local && (
+              <button
+                className="icon-button"
+                disabled={locked}
+                title="校验并修复游戏与加载器（保留模组、配置与存档）"
+                onClick={() => void repair(v.id)}
               >
                 <RefreshCw size={15} />
               </button>
@@ -562,7 +599,7 @@ export default function App() {
                 <div>
                   <div className="eyebrow">FIND YOUR NEXT ADVENTURE</div>
                   <h1>每个版本，都是新起点。</h1>
-                  <p>从官方清单获取游戏，选择你想探索的世界。</p>
+                  <p>原版、模组生态与整合包，随你的想象自由组合。</p>
                 </div>
                 <button
                   className="secondary"
@@ -573,6 +610,27 @@ export default function App() {
                   刷新列表
                 </button>
               </div>
+              <button
+                className="pack-import-banner"
+                disabled={locked || readingPack}
+                onClick={() => void pickPack()}
+              >
+                <span className="pack-import-icon">
+                  {readingPack ? (
+                    <LoaderCircle size={25} className="spin" />
+                  ) : (
+                    <PackageOpen size={26} />
+                  )}
+                </span>
+                <span>
+                  <b>{readingPack ? "正在读取整合包…" : "导入整合包"}</b>
+                  <small>
+                    Modrinth · CurseForge · MultiMC / Prism · 普通 ZIP
+                  </small>
+                </span>
+                <span className="tag">.zip / .mrpack</span>
+                <ArrowUpRight size={20} />
+              </button>
               {latest && (
                 <div className="release-banner">
                   <div className="release-art">
@@ -656,7 +714,11 @@ export default function App() {
               <div className="version-list">
                 {filter === "installed"
                   ? installed
-                      .filter((v) => v.id.includes(query))
+                      .filter((v) =>
+                        (v.id + " " + (v.name || ""))
+                          .toLowerCase()
+                          .includes(query.toLowerCase()),
+                      )
                       .map((v) => versionRow(v))
                   : list.slice(0, limit).map((v) => versionRow(v))}
               </div>
@@ -695,8 +757,8 @@ export default function App() {
                 </button>
               )}
               <p className="fine-print">
-                支持 1.13+ 原版；Apple Silicon 建议选择
-                1.19+。旧版及模组加载器暂未集成。
+                支持 1.13+；Apple Silicon 建议选择 1.19+。安装时可选 Fabric /
+                Forge / NeoForge / OptiFine。组件以各自支持的游戏版本为准。
                 {settings.source === "bmclapi" && (
                   <>
                     {" "}
@@ -994,6 +1056,25 @@ export default function App() {
                     <Download size={14} /> 下载 Java
                   </button>
                 </div>
+                {state.platform === "darwin" && (
+                  <>
+                    <label className="check-field">
+                      <input
+                        type="checkbox"
+                        checked={settings.macCompatibility}
+                        disabled={locked}
+                        onChange={(e) =>
+                          void save({ macCompatibility: e.target.checked })
+                        }
+                      />
+                      Mac 图形兼容模式
+                    </label>
+                    <p className="field-help">
+                      关闭 Forge / NeoForge 的早期加载窗口，避免部分 Mac
+                      的显示器初始化错误。原配置会保留一份备份。
+                    </p>
+                  </>
+                )}
                 <div className="setting-divider" />
                 <div className="memory-title">
                   <div>
@@ -1276,7 +1357,7 @@ export default function App() {
         <footer className="launch-bar">
           <div className="launch-version">
             <div className="mini-cube">
-              <Cube size={30} />
+              <LoaderIcon loader={selectedInstall?.loader} size={32} />
             </div>
             <div>
               <span>准备启动</span>
@@ -1293,7 +1374,7 @@ export default function App() {
                   {!installed.length && <option value="">尚未安装游戏</option>}
                   {installed.map((v) => (
                     <option key={v.id} value={v.id}>
-                      Minecraft {v.id}
+                      {v.name || `Minecraft ${v.id}`}
                     </option>
                   ))}
                 </select>
@@ -1314,7 +1395,7 @@ export default function App() {
             </span>
             <small>
               {selectedInstall
-                ? `原版 · Java ${selectedInstall.java} · ${(settings.memoryMB / 1024).toFixed(1)} GB`
+                ? `${selectedInstall.modpack ? "整合包" : selectedInstall.loader && selectedInstall.loader !== "vanilla" ? selectedInstall.loader : "原版"} · Java ${selectedInstall.java} · ${(settings.memoryMB / 1024).toFixed(1)} GB`
                 : "安装一个版本，开启新旅程"}
             </small>
           </div>
@@ -1362,6 +1443,22 @@ export default function App() {
             <X size={16} />
           </button>
         </div>
+      )}
+      {(installVersion || pack) && (
+        <InstallDialog
+          version={installVersion || undefined}
+          pack={pack || undefined}
+          manifest={manifest}
+          onClose={() => {
+            setInstallVersion(null);
+            setPack(null);
+          }}
+          onStarted={() => {
+            setInstallVersion(null);
+            setPack(null);
+            setPage("downloads");
+          }}
+        />
       )}
       {device && (
         <div className="modal-backdrop">

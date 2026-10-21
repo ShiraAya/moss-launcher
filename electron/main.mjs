@@ -10,6 +10,15 @@ import path from "node:path";
 import os from "node:os";
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
+import { loaderVersions, installProfile } from "./core/loaders.mjs";
+import {
+  inspectPack,
+  packSummary,
+  resolveCurseForge,
+  matchManualFiles,
+  importPack,
+} from "./core/modpacks.mjs";
 import { GameManager } from "./core/launcher.mjs";
 import { MicrosoftAuth } from "./core/auth.mjs";
 import { detectJava, probeJava, installJava } from "./core/java.mjs";
@@ -29,6 +38,7 @@ let win,
   loginController = null,
   progress = null,
   busy = false;
+let pendingPack = null;
 const logs = [];
 let lastEmit = 0;
 const emit = (type, data) => {
@@ -123,6 +133,29 @@ async function persist(next) {
   emit("settings", settings);
   return settings;
 }
+async function ensureJava(major, signal) {
+  let java;
+  if (settings.javaPath) {
+    java = await probeJava(settings.javaPath);
+    if (!java || java.major !== major || java.arch !== process.arch)
+      throw new Error(
+        `该版本需要 ${process.arch} 的 Java ${major}，请在设置中选择自动管理或正确的 Java。`,
+      );
+  } else {
+    java = javaList.find((j) => j.major === major && j.arch === process.arch);
+    if (!java) {
+      java = await installJava(major, runtimeDir(), { signal, emit: report });
+      javaList = await detectJava(runtimeDir());
+      emit("java", javaList);
+    }
+  }
+  return java;
+}
+function currentPack(token) {
+  if (!pendingPack || token !== pendingPack.token)
+    throw new Error("整合包预览已失效，请重新选择 ZIP。");
+  return pendingPack.pack;
+}
 function createWindow() {
   win = new BrowserWindow({
     width: 1320,
@@ -164,6 +197,7 @@ if (locked)
       gameDirectory: path.join(dataDir(), "game"),
       javaPath: "",
       memoryMB: 4096,
+      macCompatibility: true,
       playerName: "Player",
       accountMode: "offline",
       microsoftClientId: "",
@@ -187,6 +221,11 @@ if (locked)
         if (!["official", "bmclapi"].includes(patch.source))
           throw new Error("未知下载源");
         next.source = patch.source;
+      }
+      if ("macCompatibility" in patch) {
+        if (typeof patch.macCompatibility !== "boolean")
+          throw new Error("图形兼容设置无效");
+        next.macCompatibility = patch.macCompatibility;
       }
       if ("memoryMB" in patch) {
         if (
@@ -247,6 +286,7 @@ if (locked)
         selectedVersion: "",
       });
       makeManager();
+      pendingPack = null;
       emit("installed", await manager.installed());
       return settings.gameDirectory;
     });
@@ -270,11 +310,95 @@ if (locked)
       emit("java", javaList);
       return javaList;
     });
-    handle("install", (id) => {
-      safeId(id);
-      return operation("准备安装 Minecraft " + id, (signal) =>
-        manager.install(id, { source: settings.source, signal }),
-      );
+    handle("loaderVersions", (minecraft, loader) =>
+      loaderVersions(minecraft, loader, { source: settings.source }),
+    );
+    handle("install", (request) => {
+      const input =
+        typeof request === "string"
+          ? { minecraft: request, loader: "vanilla" }
+          : request;
+      return operation("准备安装 Minecraft", async (signal) => {
+        const record = await installProfile(manager, input, {
+          source: settings.source,
+          signal,
+          ensureJava,
+        });
+        await persist({ ...settings, selectedVersion: record.id });
+      });
+    });
+    handle("repair", (id) =>
+      operation("校验并修复游戏文件", async (signal) => {
+        const record = (await manager.installed()).find(
+          (v) => v.id === safeId(id),
+        );
+        if (!record) throw new Error("找不到已安装版本");
+        await installProfile(
+          manager,
+          {
+            ...record,
+            minecraft: record.minecraft || record.id,
+            loader: record.loader || "vanilla",
+          },
+          { source: settings.source, signal, ensureJava },
+        );
+      }),
+    );
+    handle("pickPack", async () => {
+      guardIdle();
+      const result = await dialog.showOpenDialog(win, {
+        title: "导入客户端整合包",
+        properties: ["openFile"],
+        filters: [{ name: "Minecraft 整合包", extensions: ["zip", "mrpack"] }],
+      });
+      if (result.canceled) return null;
+      guardIdle();
+      const pack = await inspectPack(result.filePaths[0]);
+      guardIdle();
+      pendingPack = { token: randomUUID(), pack };
+      return packSummary(pack, pendingPack.token);
+    });
+    handle("resolvePack", async (token, key) => {
+      guardIdle();
+      const resolved = await resolveCurseForge(currentPack(token), key);
+      guardIdle();
+      currentPack(token);
+      pendingPack.pack = resolved;
+      return packSummary(resolved, token);
+    });
+    handle("pickPackFiles", async (token) => {
+      guardIdle();
+      const pack = currentPack(token);
+      const result = await dialog.showOpenDialog(win, {
+        title: "选择从 CurseForge 手动下载的模组文件",
+        properties: ["openFile", "multiSelections"],
+      });
+      if (result.canceled) return null;
+      const matched = await matchManualFiles(pack, result.filePaths);
+      guardIdle();
+      currentPack(token);
+      pendingPack.pack = matched;
+      return { matched: Object.keys(matched.localFiles).length };
+    });
+    handle("openPackLink", (token, index) => {
+      const file = currentPack(token).downloadable.filter((f) => f.manual)[
+        index
+      ];
+      if (!file?.page || new URL(file.page).hostname !== "www.curseforge.com")
+        throw new Error("下载链接无效");
+      return shell.openExternal(file.page);
+    });
+    handle("importPack", (token, options) => {
+      const pack = currentPack(token);
+      return operation("导入整合包", async (signal) => {
+        const record = await importPack(manager, pack, options, {
+          source: settings.source,
+          signal,
+          ensureJava,
+        });
+        await persist({ ...settings, selectedVersion: record.id });
+        if (pendingPack?.token === token) pendingPack = null;
+      });
     });
     handle("installJava", (major) => {
       if (![8, 17, 21, 25].includes(major))
@@ -301,26 +425,7 @@ if (locked)
           );
         const meta = await manager.metadata(id);
         const major = meta.javaVersion?.majorVersion || 8;
-        let java;
-        if (settings.javaPath) {
-          java = await probeJava(settings.javaPath);
-          if (!java || java.major !== major || java.arch !== process.arch)
-            throw new Error(
-              `该版本需要 ${process.arch} 的 Java ${major}，请在设置中选择自动管理或正确的 Java。`,
-            );
-        } else {
-          java = javaList.find(
-            (j) => j.major === major && j.arch === process.arch,
-          );
-          if (!java) {
-            java = await installJava(major, runtimeDir(), {
-              signal,
-              emit: report,
-            });
-            javaList = await detectJava(runtimeDir());
-            emit("java", javaList);
-          }
-        }
+        const java = await ensureJava(major, signal);
         signal.throwIfAborted();
         const account =
           settings.accountMode === "microsoft"

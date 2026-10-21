@@ -1781,3 +1781,295 @@ select:disabled {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Component installation and isolated modpack import */
+.pack-import-banner {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  width: 100%;
+  margin-bottom: 22px;
+  padding: 19px 23px;
+  background: linear-gradient(110deg, #202d24, #19201c);
+  border: 1px solid #344d3b;
+  border-radius: 16px;
+  text-align: left;
+  color: #dbe8dc;
+  transition:
+    border-color 0.2s,
+    transform 0.2s;
+}
+.pack-import-banner:hover {
+  border-color: #83ad73;
+  transform: translateY(-1px);
+}
+.pack-import-banner > span:nth-child(2) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+.pack-import-banner b {
+  font-size: 16px;
+}
+.pack-import-banner small {
+  color: #91a095;
+  font-size: 12px;
+}
+.pack-import-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 13px;
+  background: #314331;
+  color: #b2d99b;
+}
+.install-modal {
+  width: min(790px, calc(100vw - 60px));
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  text-align: left;
+  padding: 32px;
+  outline: none;
+}
+.install-modal h2 {
+  font-size: 25px;
+  margin: 7px 0 0;
+}
+.install-heading {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+.install-symbol {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #3e523a;
+  border-radius: 15px;
+  background: #293728;
+  color: #c4e4ae;
+}
+.install-intro {
+  color: #94a296;
+  font-size: 13px;
+  margin: 20px 0 25px;
+}
+.install-modal .field-label {
+  margin-top: 20px;
+}
+.install-modal input:not([type="checkbox"]),
+.install-modal select {
+  width: 100%;
+}
+.loader-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 9px;
+}
+.loader-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid #354037;
+  background: #1b211d;
+  border-radius: 12px;
+  padding: 16px 12px;
+  color: #dce5dc;
+  min-height: 142px;
+  text-align: left;
+}
+.loader-card:hover {
+  border-color: #69835d;
+}
+.loader-card.chosen {
+  background: #2a3928;
+  border-color: #9dc77e;
+  box-shadow: 0 0 0 1px #9dc77e inset;
+}
+.loader-card b {
+  font-size: 13px;
+}
+.loader-card small {
+  font-size: 10px;
+  white-space: nowrap;
+  color: #9ca99b;
+}
+.loader-glyph {
+  width: 29px;
+  height: 29px;
+  display: grid;
+  place-items: center;
+  background: #394538;
+  border-radius: 7px;
+  font: 700 16px Georgia;
+  color: #c6d9b6;
+}
+.loader-glyph.fabric {
+  background: #4a4236;
+  color: #e7d7b1;
+}
+.loader-glyph.forge {
+  background: #3a4148;
+  color: #bad1e4;
+}
+.loader-glyph.neoforge {
+  background: #4e392d;
+  color: #edb48b;
+}
+.loader-glyph.optifine {
+  background: #374b44;
+  color: #a8d9c3;
+}
+.loader-check {
+  position: absolute;
+  right: 10px;
+  top: 13px;
+  color: #c0e79f;
+}
+.install-loading,
+.inline-message {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 13px 0;
+  font-size: 13px;
+  color: #a7b6a6;
+}
+.inline-message .text-button {
+  margin-left: auto;
+}
+.install-modal .field-help {
+  line-height: 1.8;
+  margin: 10px 0;
+  color: #95a390;
+  font-size: 12px;
+}
+.install-bottom {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #303a31;
+  margin-top: 25px;
+  padding-top: 23px;
+}
+.install-bottom p {
+  color: #879584;
+  font-size: 12px;
+  max-width: 360px;
+  line-height: 1.6;
+}
+.install-bottom .primary {
+  width: auto;
+  min-width: 140px;
+  flex-shrink: 0;
+}
+.pack-summary {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  margin: 12px 0;
+  font-size: 12px;
+  color: #9aac9a;
+}
+.pack-dependencies {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 24px 0;
+  padding: 18px;
+  background: #1c251e;
+  border: 1px solid #344333;
+  border-radius: 12px;
+}
+.pack-dependencies div {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.pack-dependencies span {
+  font-size: 12px;
+  color: #96a990;
+}
+.pack-dependencies b {
+  font-size: 14px;
+  color: #d1e4c5;
+}
+.check-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #bdcbb8;
+  margin: 20px 0;
+}
+.check-field input {
+  accent-color: #b4d695;
+  width: 17px;
+  height: 17px;
+}
+.install-error {
+  display: flex;
+  gap: 10px;
+  background: #36291f;
+  border: 1px solid #5c4431;
+  color: #efbf93;
+  padding: 14px;
+  border-radius: 10px;
+  margin-top: 20px;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.install-error svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.manual-files {
+  background: #282c21;
+  padding: 17px;
+  border-radius: 10px;
+  margin-top: 20px;
+}
+.manual-files b {
+  font-size: 13px;
+}
+.manual-files p {
+  font-size: 12px;
+  color: #aeb39d;
+  line-height: 1.7;
+}
+.manual-files .text-button {
+  display: flex;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+  margin: 9px 0;
+  font-size: 12px;
+}
+.manual-files .secondary {
+  margin-top: 15px;
+}
+.curse-panel .input-row input {
+  min-width: 0;
+}
+.curse-panel .input-row button {
+  flex-shrink: 0;
+}
+.version-info strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: 480px;
+}
+
+.loader-glyph {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+}

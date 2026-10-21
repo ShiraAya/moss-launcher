@@ -3,6 +3,7 @@ export type Settings = {
   gameDirectory: string;
   javaPath: string;
   memoryMB: number;
+  macCompatibility: boolean;
   playerName: string;
   accountMode: "offline" | "microsoft";
   microsoftClientId: string;
@@ -20,7 +21,11 @@ export type Installed = {
   java: number;
   installedAt: string;
   arch: string;
-
+  name?: string;
+  minecraft?: string;
+  loader?: Loader;
+  loaderVersion?: string;
+  modpack?: { format: string };
 };
 export type Java = {
   path: string;
@@ -65,6 +70,26 @@ export type Device = {
   verificationUri: string;
   expiresIn: number;
 };
+export type Loader = "vanilla" | "fabric" | "forge" | "neoforge" | "optifine";
+export type InstallRequest = {
+  minecraft: string;
+  loader: Loader;
+  loaderVersion?: string;
+};
+export type LoaderVersion = { version: string; label: string };
+export type PackPreview = {
+  token: string;
+  name: string;
+  format: "plain" | "modrinth" | "curseforge" | "multimc";
+  minecraft: string;
+  loader: Loader;
+  loaderVersion: string;
+  files: number;
+  downloads: number;
+  optional: number;
+  size: number;
+  manual: { path: string; url: string }[];
+};
 export interface MossAPI {
   state(): Promise<State>;
   manifest(): Promise<Manifest>;
@@ -72,7 +97,17 @@ export interface MossAPI {
   pickDirectory(): Promise<string | null>;
   pickJava(): Promise<Java | null>;
   detectJava(): Promise<Java[]>;
-  install(id: string): Promise<unknown>;
+  install(request: InstallRequest | string): Promise<unknown>;
+  repair(id: string): Promise<unknown>;
+  loaderVersions(minecraft: string, loader: Loader): Promise<LoaderVersion[]>;
+  pickPack(): Promise<PackPreview | null>;
+  resolvePack(token: string, key: string): Promise<PackPreview>;
+  pickPackFiles(token: string): Promise<{ matched: number } | null>;
+  openPackLink(token: string, index: number): Promise<unknown>;
+  importPack(
+    token: string,
+    options: InstallRequest & { name: string; includeOptional: boolean },
+  ): Promise<unknown>;
   launch(id: string): Promise<unknown>;
   cancel(): Promise<unknown>;
   installJava(major: number): Promise<unknown>;
