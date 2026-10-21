@@ -1,6 +1,6 @@
 # 苔原 Moss Launcher
 
-为 macOS 和 Windows 制作的 Minecraft **Java 版**桌面启动器。深色森林界面、自绘矢量方块场景、真实游戏下载和 Java 启动链路，基于 Electron + React + TypeScript。
+为 macOS 和 Windows 制作的 Minecraft **Java 版**桌面启动器，基于 Electron + React + TypeScript。
 
 当前版本：**0.2.0**。
 
@@ -38,7 +38,7 @@
 4. 到「游戏版本」选择正式版并安装；网络不佳时可在「启动器设置」切换 BMCLAPI。
 5. 点击底部「启动游戏」。自动管理会选择匹配的 Java；本机缺失时会下载运行环境。
 
-这是开发构建：Mac 使用 ad-hoc 签名，尚未做 Apple 公证；Windows 未配置发布者签名。系统可能要求在隐私与安全设置中允许打开这个应用。正式对外发布前应配置自己的签名证书与公证流程。
+Mac 使用 ad-hoc 签名，尚未做 Apple 公证；Windows 未配置发布者签名。系统可能要求在隐私与安全设置中允许打开这个应用。
 
 关闭窗口时若游戏、下载或登录仍在进行，窗口会隐藏以保留任务；再次打开应用即可恢复窗口。可先取消下载或关闭游戏后退出。
 
@@ -49,8 +49,6 @@
 3. 已安装的版本旁有 **＋** 按钮，可以基于同一 Minecraft 版本再安装其他组件。
 4. 用「打开游戏目录」进入实例，将对应版本的模组放入 `mods/`。需要 Fabric API 的模组须另行安装匹配的 Fabric API；整合包中已声明的文件会随包下载。
 5. 圆形箭头会校验、修复游戏和加载器，保留实例中的模组、配置和存档；不会重新下载整合包模组。
-
-Forge、NeoForge、Fabric 是互斥的基础加载器；OptiFine 当前作为独立组件实例安装，不自动与其他加载器混装。OptiFine 清单与 JAR 来自 BMCLAPI，界面已标注。其余组件默认从各自官方 Maven / API 获取，部分依赖可按设置使用 BMCLAPI 镜像。
 
 Mac 默认开启图形兼容模式，在实例 `config/fml.toml` 中关闭 Forge / NeoForge 的早期加载窗口，避免部分 Mac 显示器初始化失败；首次修改已有配置时保留 `.moss-backup`。可以在「启动器设置」切换。
 
